@@ -1,127 +1,196 @@
+# PayMyBuddy – Dockerized Financial Transaction App
 
-# PayMyBuddy - Financial Transaction Application
-
-This repository contains the *PayMyBuddy* application, which allows users to manage financial transactions. It includes a Spring Boot backend and MySQL database.
-
-**![PayMyBuddy Overview](https://lh7-rt.googleusercontent.com/docsz/AD_4nXf0fGeMjotdY0KzJL13cmGhXad3GM_kn7OSXZJ4CCSQ89zZTlrhBVVi91QjRMgVeszmUMAMAgyavzr4VyQ9YOAUiWmL2sF6aVQYiJPLZfztxv7ERNsIra2O_2SYIX5ZFY5eOARMeI2qnOwrIymuyJnvtuYs?key=mLqAl_ccMoG4hHcRzSYKpw)**
+PayMyBuddy est une application Spring Boot permettant aux utilisateurs de gérer des transactions financières entre amis. Ce projet démontre le déploiement conteneurisé de l'application via Docker et Docker Compose, avec une attention portée à la sécurité, l'automatisation et la portabilité.
 
 ---
 
-## Objectives
+## Objectifs
 
-This POC demonstrates the deployment of the *PayMyBuddy* app using Docker containers, with a focus on:
-
-- Improving deployment processes
-- Versioning infrastructure releases
-- Implementing best practices for Docker
-- Using Infrastructure as Code
-
-### Key Themes:
-
-- Dockerization of the backend and database
-- Orchestration with Docker Compose
-- Securing the deployment process
-- Deploying and managing Docker images via Docker Registry
+- Conteneuriser le backend Spring Boot et la base MySQL
+- Orchestration avec Docker Compose
+- Sécuriser les secrets avec `.env`
+- Préparer le déploiement vers un registre Docker privé
 
 ---
 
-## Context
+## Technologies
 
-*PayMyBuddy* is an application for managing financial transactions between friends. The current infrastructure is tightly coupled and manually deployed, resulting in inefficiencies. We aim to improve scalability and streamline the deployment process using Docker and container orchestration.
-
----
-
-## Infrastructure
-
-The infrastructure will run on a Docker-enabled server with **Ubuntu 20.04**. This proof-of-concept (POC) includes containerizing the Spring Boot backend and MySQL database and automating deployment using Docker Compose.
-
-### Components:
-
-- **Backend (Spring Boot):** Manages user data and transactions
-- **Database (MySQL):** Stores users, transactions, and account details
-- **Orchestration:** Uses Docker Compose to manage the entire application stack
+- Spring Boot + Java 17 (Amazon Corretto)
+- MySQL 8
+- Docker & Docker Compose
+- `.env` pour la configuration sécurisée
 
 ---
 
-## Application
+## Dockerfile (backend)
 
-*PayMyBuddy* is divided into two main services:
+```dockerfile
+#Génération du .jar
+FROM maven:3.9.6-eclipse-temurin-17 AS builder
+WORKDIR /app
+COPY pom.xml .
+COPY src ./src
+RUN mvn clean package -DskipTests
 
-1. **Backend Service (Spring Boot):**
-   - Exposes an API to handle transactions and user interactions
-   - Connects to a MySQL database for persistent storage
+#contruction de l'image
+FROM amazoncorretto:17-alpine
+LABEL maintainer="Harxen" email="harold.m.kengne@gmail.com"
+WORKDIR /paymybuddy
+ 
+COPY target/*.jar paymybuddy.jar
+EXPOSE 8080
 
-2. **Database Service (MySQL):**
-   - Stores user and transaction data
-   - Exposed on port 3306 for the backend to connect
-
-### Build and Test (7 Points)
-
-You will build and deploy the backend and MySQL database in Docker containers.
-
-#### Database Initialization
-The database schema is initialized using the initdb directory, which contains SQL scripts to set up the required tables and initial data. These scripts are automatically executed when the MySQL container starts.
-
-#### Extra Challenges (Optional)
-Secure Sensitive Information: Avoid hardcoding sensitive data such as database credentials directly in your Dockerfile. Instead, use Docker secrets or .env files to manage them securely. These environment variables can be set dynamically at runtime to protect sensitive information:
-
-```bash
-# Environment variables for database connection
-# Do not hardcode credentials; use secrets or environment files instead.
-
-# ENV SPRING_DATASOURCE_USERNAME  # Database username
-# ENV SPRING_DATASOURCE_PASSWORD  # Database password
-# ENV SPRING_DATASOURCE_URL       # Database connection URL
+ENTRYPOINT ["java", "-jar", "paymybuddy.jar"]
 ```
 
-User Authentication: Add user authentication to the backend to restrict access to the API and transactions.
+---
 
-1. **Backend Dockerfile:**
-   - Base image: `amazoncorretto:17-alpine`
-   - Copy backend JAR file and expose port 8080
-   - CMD: Run the backend service
-   
-2. **Database Setup:**
-   - Use MySQL as a Docker service, mounting the data to a persistent volume
-   - Expose port 3306
+## Docker Compose
 
-### Orchestration with Docker Compose (5 Points)
+```yaml
+version: '3.3'
 
-The `docker-compose.yml` will deploy both services:
-- **paymybuddy-backend:** Runs the Spring Boot application.
-- **paymybuddy-db:** MySQL database to handle user data and transactions.
+services:
+  paymybuddy-backend:
+    image: paymybuddy-backend
+    container_name: paymybuddy-backend
+    depends_on:
+      - paymybuddy-db
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./secrets/app.env
+    networks:
+      - paymybuddy_network
 
-Key features:
-- Services depend on each other for smooth orchestration
-- Volumes for persistent storage
-- Environment variables for secure configuration
+  paymybuddy-db:
+    image: mysql:8
+    container_name: paymybuddy-db
+    volumes:
+      - ./initdb/create.sql:/docker-entrypoint-initdb.d/init.sql
+      - paymybuddy-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    env_file:
+      - ./secrets/db.env
+    networks:
+      - paymybuddy_network
+
+networks:
+  paymybuddy_network:
+    name: paymybuddy_network
+    driver: bridge
+
+volumes:
+  paymybuddy-data:
+```
 
 ---
 
-## Docker Registry (4 Points)
+## Sécurité des secrets
 
-You need to push your built images to a private Docker registry and deploy the images using Docker Compose.
+Les mots de passe et identifiants de base de données sont stockés dans deux fichiers `.env` :
 
-### Steps:
-1. Build the images for both backend and MySQL.
-2. Deploy a private Docker registry.
-3. Push your images to the registry and use them in `docker-compose.yml`.
+### `secrets/db.env`
+
+```env
+MYSQL_ROOT_PASSWORD=root
+MYSQL_DATABASE=bd_paymybuddy
+MYSQL_USER=appuser
+MYSQL_PASSWORD=passuser
+```
+
+### `secrets/app.env`
+
+```env
+SPRING_DATASOURCE_URL=jdbc:mysql://paymybuddy-db:3306/bd_paymybuddy
+SPRING_DATASOURCE_USERNAME=appuser
+SPRING_DATASOURCE_PASSWORD=passuser
+```
+
+Les fichiers `.env` sont exclus du dépôt avec `.gitignore` pour plus de sécurité.
 
 ---
 
-## Delivery (4 Points)
+## Lancer le projet
 
-For your delivery, provide the following in your repository:
+### 1. Creation de l'image backend utilisée dans le docker-compose.yml
 
-- **README** with screenshots and explanations.
-- **Dockerfile** and **docker-compose.yml**.
-- **Screenshots** showing the application running.
-  
-Your delivery will be evaluated based on:
-- Quality of explanations and screenshots
-- Repository structure and clarity
+```bash
+docker build -t paymybuddy-backend .
+```
+### 2. Démarrage des services
 
-**Good luck!**
+```bash
+docker-compose up -d
+```
 
-**![](https://lh7-rt.googleusercontent.com/docsz/AD_4nXc-CjKFk4NY9yXiR1oheHsFR4YYn4HcD_0A6fgd11tHcT3p1U2RKXvIs6HflkvuLOOUzFxzxYCjDno2f1p6_q31dDE9AaUoEx1pi0Fs9ApJG2czL-88xrx3XO-oEP5ZXXsyXw0GKjA2W0A5q1Bk979SB1M?key=mLqAl_ccMoG4hHcRzSYKpw)**
+### Accès à l'Application
 
+```
+http://localhost:8080
+```
+
+---
+
+## Déploiement dans un Docker Registry
+
+### 1. Création du registre
+
+```bash
+docker compose -f docker-compose-registry.yml up -d
+```
+
+### 2. Tag de l’image
+
+```bash
+docker tag paymybuddy-backend localhost:5000/paymybuddy-backend:v1
+```
+
+### 3. Push dans le registre privé
+
+```bash
+docker login localhost:5000
+# username: paymybuddy
+# password: change-me
+docker push localhost:5000/paymybuddy-backend:v1
+```
+
+---
+
+## Captures d’écran
+
+> Les images sont dans `src/main/resources/readme/`
+
+### Docker containers
+
+![Docker PS](src/main/resources/readme/docker-ps.png)
+
+### Base MySQL initialisée
+
+![MySQL Init](src/main/resources/readme/mysql-init.png)
+
+### Application en cours d'exécution
+
+![APP RUN](src/main/resources/readme/app-running.png)
+
+### Tests de l'application
+
+![Create account](src/main/resources/readme/app-test.png)
+![Login](src/main/resources/readme/test-login.png)
+
+---
+
+### Création du registre
+
+![CREATE](src/main/resources/readme/create-registry-local.png)
+![PUSH](src/main/resources/readme/registry-push.png)
+![VIEW](src/main/resources/readme/images-registry.png)
+
+---
+
+## Auteur
+
+Réalisé par Harold Kengne 
+
+---
