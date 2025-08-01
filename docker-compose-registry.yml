@@ -1,4 +1,5 @@
-version: '3.3'
+version: '3.8'
+
 services:
   paymybuddy-registry:
     image: registry:2.8.1
@@ -12,12 +13,13 @@ services:
     environment:
       - REGISTRY_STORAGE_DELETE_ENABLED=true
       - REGISTRY_AUTH=htpasswd
-      - "REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm"
+      - REGISTRY_AUTH_HTPASSWD_REALM=Registry Realm
       - REGISTRY_AUTH_HTPASSWD_PATH=/auth/htpasswd
-    command:
-      - /bin/sh
-      - -c
-      - 'apk add --no-cache apache2-utils && htpasswd -Bbn paymybuddy change-me > /auth/htpasswd && registry serve /etc/docker/registry/config.yml'
+    command: >
+      sh -c "apk add --no-cache apache2-utils &&
+             mkdir -p /auth &&
+             htpasswd -Bbn paymybuddy change-me > /auth/htpasswd &&
+             registry serve /etc/docker/registry/config.yml"
     networks:
       - paymybuddy_registry_network
 
@@ -31,10 +33,11 @@ services:
     environment:
       - NGINX_PROXY_PASS_URL=http://paymybuddy-registry:5001
       - DELETE_IMAGES=true
-      - REGISTRY_TITLE=Paymybuddy
+      - REGISTRY_TITLE=PayMyBuddy Registry
       - SINGLE_REGISTRY=true
     networks:
       - paymybuddy_registry_network
 
 networks:
   paymybuddy_registry_network:
+    name: paymybuddy_registry_network
