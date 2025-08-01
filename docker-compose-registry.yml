@@ -31,7 +31,7 @@ services:
     environment:
       - NGINX_PROXY_PASS_URL=http://paymybuddy-registry:5001
       - DELETE_IMAGES=true
-      - REGISTRY_TITLE=Pozos
+      - REGISTRY_TITLE=Paymybuddy
       - SINGLE_REGISTRY=true
     networks:
       - paymybuddy_registry_network
