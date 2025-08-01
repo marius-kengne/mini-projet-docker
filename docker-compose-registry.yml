@@ -6,7 +6,7 @@ services:
     container_name: paymybuddy-registry
     restart: always
     ports:
-      - "5001:5000"
+      - "5000:5000"
     volumes:
       - /opt/docker/registry:/var/lib/registry
       - ./registry/auth:/auth
@@ -29,9 +29,9 @@ services:
     depends_on:
       - paymybuddy-registry
     ports:
-      - "8086:80"
+      - "8090:80"
     environment:
-      - NGINX_PROXY_PASS_URL=http://paymybuddy-registry:5001
+      - NGINX_PROXY_PASS_URL=http://paymybuddy-registry:5000
       - DELETE_IMAGES=true
       - REGISTRY_TITLE=PayMyBuddy Registry
       - SINGLE_REGISTRY=true
